@@ -119,6 +119,19 @@ h1 {
     box-shadow: 0 15px 30px -5px rgba(79, 70, 229, 0.5);
 }
 
+.cta-button.secondary {
+    background: transparent;
+    border: 1px solid var(--accent-primary);
+    box-shadow: none;
+    margin-left: 1rem;
+}
+
+.cta-button.secondary:hover {
+    background: rgba(79, 70, 229, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px -5px rgba(79, 70, 229, 0.3);
+}
+
 .ios-note {
     margin-top: 1rem;
     color: #64748b;
