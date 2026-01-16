@@ -48,7 +48,22 @@ googletag.cmd.push(function() {
     }
   });
 
-  // Display the slot (this registers it, doesn't show it visually yet for rewarded)
+  // Listen for Render Ended (to catch empty/no-fill scenarios)
+  googletag.pubads().addEventListener('slotRenderEnded', function(event) {
+    if (event.slot === rewardedSlot) {
+        console.log('JS: Slot render ended. isEmpty:', event.isEmpty);
+        if (event.isEmpty) {
+             // No ad returned. Fail immediately.
+             if (onRewardCallback) {
+                 onRewardCallback(null, null);
+                 onRewardCallback = null;
+             }
+             isAdLoaded = false;
+        }
+    }
+  });
+
+  // Display the slot
   googletag.display(rewardedSlot);
 });
 
@@ -62,38 +77,28 @@ function loadWebRewardedAd() {
 
 function showWebRewardedAd(callback) {
     console.log('JS: Showing Web Rewarded Ad...');
-    if (isAdLoaded) {
-        onRewardCallback = callback;
-        // Check if we need to do anything specific to "show" it, 
-        // usually refreshed usage in defineOutOfPageSlot handles the trigger?
-        // Actually for GPT Rewarded, it usually shows automatically when 'ready' if config is set,
-        // OR we might need to rely on the fact it's an overlay.
-        // Wait, 'defineOutOfPageSlot' for rewarded ads works differently.
-        // It serves immediately upon refresh if matched.
-        // However, we usually want to control the "Show".
-        // GAM Rewarded Ads are usually immediate.
-        // Let's rely on the refresh triggered in 'load' to have prepared it, 
-        // but wait... invalid logic. 
-        // A refresh() on a rewarded slot usually triggers the ad to display immediately when ready.
-        // To control it, we might need to use 'googletag.pubads().refresh()' ONLY when we want to show it?
-        // NO, that's slow.
-        // Correct pattern: Prefetch is tricky with standard GPT Rewarded.
-        // Most web implementations just call refresh() when the user clicks the button.
-        
-        // Let's update logic: 'load' does nothing or sets a flag.
-        // 'show' calls refresh().
-        
-        // REVISION: We will call refresh() inside showWebRewardedAd().
-        // loadWebRewardedAd() will be a no-op or just log.
-        googletag.cmd.push(function() {
+    onRewardCallback = callback;
+    
+    // Safety Timeout: If nothing happens (no grant, no close, no empty render) in 10s, abort.
+    setTimeout(function() {
+        if (onRewardCallback) {
+            console.log('JS: Ad timeout. Aborting.');
+            onRewardCallback(null, null);
+            onRewardCallback = null;
+        }
+    }, 10000);
+
+    if (!isAdLoaded) {
+         // Trigger refresh if not loaded
+         googletag.cmd.push(function() {
              googletag.pubads().refresh([rewardedSlot]);
-        });
+         });
     } else {
-        console.log('JS: Ad not loaded (conceptually). Triggering refresh now.');
-        onRewardCallback = callback;
-        googletag.cmd.push(function() {
-             googletag.pubads().refresh([rewardedSlot]);
-        });
+        // If already loaded/ready, GPT OutOfPage usually shows itself. 
+        // But if it didn't, we might need to refresh again or just wait.
+        // For simplicity/robustness, we'll refresh which usually re-serves or shows.
+        // Or if it's already visible, the user is interacting.
+         console.log('JS: Ad supposedly loaded/ready.');
     }
 }
 
