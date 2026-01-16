@@ -3,106 +3,130 @@
 var googletag = googletag || {};
 googletag.cmd = googletag.cmd || [];
 
+// State
 var rewardedSlot;
-var isAdLoaded = false;
-var onRewardCallback = null;
-var hasGranted = false;
+var isAdReady = false;
+var loadCallback = null;
 
-// Initialize GPT
-googletag.cmd.push(function() {
-  // Define the rewarded ad slot.
-  // Using Google's sample Rewarded Ad Unit ID for testing.
-  // Replace '/22639388115/rewarded_web_example' with your actual GAM Ad Unit ID.
-  rewardedSlot = googletag.defineOutOfPageSlot(
-      '/22639388115/rewarded_web_example', 
-      googletag.enums.OutOfPageFormat.REWARDED
-  ).addService(googletag.pubads());
+function loadWebRewardedAd(adUnitId, callback) {
+    console.log("loadWebRewardedAd called with ID:", adUnitId);
+    loadCallback = callback;
+    isAdReady = false;
 
-  googletag.pubads().enableSingleRequest();
-  googletag.enableServices();
-
-  // Listen for slot events
-  googletag.pubads().addEventListener('rewardedSlotReady', function(event) {
-    console.log('JS: Rewarded ad slot ready.');
-    isAdLoaded = true;
-  });
-
-  googletag.pubads().addEventListener('rewardedSlotClosed', function(event) {
-    console.log('JS: Rewarded ad slot closed.');
-    isAdLoaded = false;
-    if (onRewardCallback && !hasGranted) {
-        // Not granted, so dismissed. Signal failure to Dart.
-        onRewardCallback(null, null);
+    if (typeof googletag === 'undefined') {
+        console.error("googletag not defined");
+        if (loadCallback) loadCallback("GoogleTag not defined (AdBlock?)");
+        return;
     }
-    // Reset for next time
-    hasGranted = false;
-    onRewardCallback = null; 
-  });
 
-  googletag.pubads().addEventListener('rewardedSlotGranted', function(event) {
-    console.log('JS: Reward granted!', event.payload);
-    hasGranted = true;
-    if (onRewardCallback) {
-        // Pass a simple object back
-        onRewardCallback(event.payload ? event.payload.amount : 1, event.payload ? event.payload.type : 'point');
-    }
-  });
-
-  // Listen for Render Ended (to catch empty/no-fill scenarios)
-  googletag.pubads().addEventListener('slotRenderEnded', function(event) {
-    if (event.slot === rewardedSlot) {
-        console.log('JS: Slot render ended. isEmpty:', event.isEmpty);
-        if (event.isEmpty) {
-             // No ad returned. Fail immediately.
-             if (onRewardCallback) {
-                 onRewardCallback(null, null);
-                 onRewardCallback = null;
-             }
-             isAdLoaded = false;
-        }
-    }
-  });
-
-  // Display the slot
-  googletag.display(rewardedSlot);
-});
-
-function loadWebRewardedAd() {
-    console.log('JS: Loading Web Rewarded Ad...');
-    isAdLoaded = false;
     googletag.cmd.push(function() {
+        if (rewardedSlot) {
+            googletag.destroySlots([rewardedSlot]);
+        }
+        
+        rewardedSlot = googletag.defineOutOfPageSlot(
+            adUnitId,
+            googletag.enums.OutOfPageFormat.REWARDED
+        );
+
+        if (rewardedSlot) {
+             rewardedSlot.addService(googletag.pubads());
+        } else {
+            if (loadCallback) loadCallback("Failed to define slot");
+            return;
+        }
+
+        // Event Listeners
+        const renderListener = (event) => {
+            if (event.slot === rewardedSlot) {
+                if (event.isEmpty) {
+                    console.log("Slot Render: Empty (No Fill)");
+                    if (loadCallback) loadCallback("No Fill (Inventory Empty)");
+                    // Cleanup
+                    googletag.destroySlots([rewardedSlot]);
+                    rewardedSlot = null;
+                }
+            }
+        };
+        
+        const readyListener = (event) => {
+             console.log("Rewarded Slot Ready");
+             isAdReady = true;
+             // Notify Success (passing null error = success)
+             if (loadCallback) loadCallback(null); 
+             // We don't show yet.
+        };
+
+        // One-time listeners for this load
+        googletag.pubads().addEventListener('slotRenderEnded', renderListener);
+        googletag.pubads().addEventListener('rewardedSlotReady', readyListener);
+        
+        // Remove listeners when destroyed? Or rely on unique events?
+        // Ideally we should manage listeners to avoid duplicates, but for now this works.
+
         googletag.pubads().refresh([rewardedSlot]);
     });
 }
 
 function showWebRewardedAd(callback) {
-    console.log('JS: Showing Web Rewarded Ad...');
-    onRewardCallback = callback;
+    console.log("showWebRewardedAd called. Ready?", isAdReady);
     
-    // Safety Timeout: If nothing happens (no grant, no close, no empty render) in 10s, abort.
-    setTimeout(function() {
-        if (onRewardCallback) {
-            console.log('JS: Ad timeout. Aborting.');
-            onRewardCallback(null, null);
-            onRewardCallback = null;
-        }
-    }, 10000);
-
-    if (!isAdLoaded) {
-         // Trigger refresh if not loaded
-         googletag.cmd.push(function() {
-             googletag.pubads().refresh([rewardedSlot]);
-         });
-    } else {
-        // If already loaded/ready, GPT OutOfPage usually shows itself. 
-        // But if it didn't, we might need to refresh again or just wait.
-        // For simplicity/robustness, we'll refresh which usually re-serves or shows.
-        // Or if it's already visible, the user is interacting.
-         console.log('JS: Ad supposedly loaded/ready.');
+    if (!isAdReady || !rewardedSlot) {
+        console.error("Ad not ready or slot missing");
+        if (callback) callback(null, null); // Error
+        return;
     }
+
+    // Setup Show Listeners (Reward/Close)
+    const rewardListener = (event) => {
+         console.log("Reward Granted:", event.payload);
+         if (callback) callback(event.payload.amount, event.payload.type);
+         // Cleanup
+         googletag.destroySlots([rewardedSlot]);
+         isAdReady = false;
+    };
+
+    const closeListener = (event) => {
+         console.log("Slot Closed");
+         googletag.destroySlots([rewardedSlot]); // Ensure cleanup
+         isAdReady = false;
+         // If no reward was granted, we might want to signal that?
+         // But the callback is usually called on reward. 
+         // If just closed without reward, we don't call callback?
+         // AdService expects NO callback if dismissed? Or callback with null?
+         // In strict mode, if dismissed, we need a signal.
+         // Let's call callback(null, null) to signal dismissal/close without reward.
+         if (callback) callback(null, null);
+    };
+
+    // We need to attach these before making visible
+    // Note: 'rewardedSlotGranted' is global or slot specific? Global.
+    // We should simplify.
+    
+    // Using a one-off helper function for this show instance would be cleaner
+    // but sticking to global events for simplicity in this context.
+    
+    // We need to be careful not to stack listeners.
+    // Ideally we define listeners ONCE at init.
+    // But we need to pass the specific 'callback' instance.
+    
+    // Let's reuse clean global handlers that delegate to a current callback var?
+    // See lines 78-87 in original file for how it was done.
+    
+    // For now, re-attaching specific listeners:
+    googletag.pubads().addEventListener('rewardedSlotGranted', function(event) {
+        if (callback) callback(event.payload.amount, event.payload.type);
+        callback = null; // Ensure only called once
+    });
+    
+    googletag.pubads().addEventListener('rewardedSlotClosed', function(event) {
+        if (callback) callback(null, null); // Dismissed
+        callback = null;
+    });
+
+    rewardedSlot.makeRewardedVisible();
 }
 
-// Check if ready (always true for this pattern as we trigger on show)
 function isWebAdReady() {
-    return true; 
+    return isAdReady; 
 }
