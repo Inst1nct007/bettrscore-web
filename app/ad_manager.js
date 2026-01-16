@@ -6,6 +6,7 @@ googletag.cmd = googletag.cmd || [];
 var rewardedSlot;
 var isAdLoaded = false;
 var onRewardCallback = null;
+var hasGranted = false;
 
 // Initialize GPT
 googletag.cmd.push(function() {
@@ -29,15 +30,18 @@ googletag.cmd.push(function() {
   googletag.pubads().addEventListener('rewardedSlotClosed', function(event) {
     console.log('JS: Rewarded ad slot closed.');
     isAdLoaded = false;
-    if (onRewardCallback) {
-        // We might want to trigger dismiss here
+    if (onRewardCallback && !hasGranted) {
+        // Not granted, so dismissed. Signal failure to Dart.
+        onRewardCallback(null, null);
     }
-    // Automatically reload for next time?
-    // loadWebRewardedAd(); 
+    // Reset for next time
+    hasGranted = false;
+    onRewardCallback = null; 
   });
 
   googletag.pubads().addEventListener('rewardedSlotGranted', function(event) {
     console.log('JS: Reward granted!', event.payload);
+    hasGranted = true;
     if (onRewardCallback) {
         // Pass a simple object back
         onRewardCallback(event.payload ? event.payload.amount : 1, event.payload ? event.payload.type : 'point');
