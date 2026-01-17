@@ -1,6 +1,6 @@
 {
-    "version": "1.0.1",
-    "buildNumber": 2004,
-    "force": false,
-    "notes": "Bug fixes and performance improvements."
+    "version": "1.0.2",
+    "buildNumber": 2005,
+    "force": true,
+    "notes": "Critical update: Fixed update logic and UI improvements."
 }
