@@ -1,6 +1,6 @@
 {
-    "version": "1.0.2",
-    "buildNumber": 2005,
+    "version": "1.0.3",
+    "buildNumber": 2006,
     "force": true,
-    "notes": "Critical update: Fixed update logic and UI improvements."
+    "notes": "v1.0.3: Mid-test ads and timers."
 }
