@@ -1,6 +1,6 @@
 {
-    "version": "1.0.4",
-    "buildNumber": 2007,
+    "version": "1.0.5",
+    "buildNumber": 2008,
     "force": true,
-    "notes": "v1.0.4: Fixed ad errors (Android) to allow access if ads fail to load."
+    "notes": "v1.0.5: Critical compatibility update (64-bit support) to fix installation errors on newer Android devices."
 }
