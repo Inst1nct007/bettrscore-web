@@ -1,6 +1,6 @@
 {
-    "version": "1.0.3",
-    "buildNumber": 2006,
+    "version": "1.0.4",
+    "buildNumber": 2007,
     "force": true,
-    "notes": "v1.0.3: Mid-test ads and timers."
+    "notes": "v1.0.4: Fixed ad errors (Android) to allow access if ads fail to load."
 }
